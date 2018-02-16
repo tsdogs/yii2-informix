@@ -26,7 +26,7 @@ class QueryBuilder extends \yii\db\QueryBuilder
     public $typeMap = [
         Schema::TYPE_PK        => 'serial NOT NULL PRIMARY KEY',
         Schema::TYPE_BIGPK     => 'serial8 NOT NULL PRIMARY KEY',
-        Schema::TYPE_STRING    => 'varchar(255)',
+        Schema::TYPE_STRING    => 'char(255)',
         Schema::TYPE_TEXT      => 'text',
         Schema::TYPE_SMALLINT  => 'smallint',
         Schema::TYPE_INTEGER   => 'integer',
@@ -351,7 +351,7 @@ class QueryBuilder extends \yii\db\QueryBuilder
         if ($orderBy !== '') {
             $sql .= $this->separator . $orderBy;
         }
-        if ($this->hasLimit($limit)) {
+        /*if ($this->hasLimit($limit)) {
             $find = '/^([\s(])*SELECT(\s+SKIP\s+\d+)?(\s+LIMIT\s+\d+)?(\s+DISTINCT)?/i';
             $replace = "\\1SELECT\\2 LIMIT $limit\\4";
             $sql = preg_replace($find, $replace, $sql);
@@ -360,7 +360,7 @@ class QueryBuilder extends \yii\db\QueryBuilder
             $find = '/^([\s(])*SELECT(\s+SKIP\s+\d+)?(\s+DISTINCT)?/i';
             $replace =  "\\1SELECT SKIP $offset\\3";
             $sql = preg_replace($find, $replace, $sql);
-        }
+        }*/
         return $sql;
     }
 
@@ -443,4 +443,5 @@ class QueryBuilder extends \yii\db\QueryBuilder
 
         return '(' . implode($operator === 'IN' ? ' OR ' : ' AND ', $vss) . ')';
     }
+    
 }

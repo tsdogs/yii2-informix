@@ -185,22 +185,21 @@ class Schema extends \yii\db\Schema
     protected function findColumns($table)
     {
         $sql = <<<SQL
-SELECT syscolumns.colname,
-       syscolumns.colmin,
-       syscolumns.colmax,
+SELECT syscolumns.colno,
+       TRIM(syscolumns.colname) as colname,
        syscolumns.coltype,
-       syscolumns.extended_id,
-       NOT(coltype>255) AS allownull,
        syscolumns.collength,
        sysdefaults.type AS deftype,
        sysdefaults.default AS defvalue
-FROM systables
-  INNER JOIN syscolumns ON syscolumns.tabid = systables.tabid
-  LEFT JOIN sysdefaults ON sysdefaults.tabid = syscolumns.tabid AND sysdefaults.colno = syscolumns.colno
-WHERE systables.tabid >= 100
+FROM systables, syscolumns , OUTER 
+   sysdefaults 
+WHERE syscolumns.tabid = systables.tabid 
+       AND sysdefaults.tabid = syscolumns.tabid AND sysdefaults.colno = syscolumns.colno
+       AND systables.tabid >= 100
 AND   systables.tabname = :tableName
 ORDER BY syscolumns.colno
 SQL;
+
 
         try {
             $columns = $this->db->createCommand($sql, [
@@ -253,7 +252,7 @@ SQL;
             $coltypereal = $coltypebase % 256;
             if (array_key_exists($coltypereal, $columnsTypes)) {
                 $column['type'] = $columnsTypes[$coltypereal];
-                $extended_id = (int) $column['extended_id'];
+                $extended_id = 0;
                 switch ($coltypereal) {
                     case 0://CHAR
                     case 13://VARCHAR
@@ -378,8 +377,8 @@ SQL;
     protected function createColumn($column)
     {
         $c = $this->createColumnSchema();
-        $c->name = $column['colname'];
-        $c->allowNull = (boolean) $column['allownull'];
+        $c->name = trim($column['colname']);
+        $c->allowNull = !($column['coltype']>255);
         $c->isPrimaryKey = false;
 
         $type = strtolower($column['type']);
@@ -437,10 +436,10 @@ SQL;
     protected function findConstraints($table)
     {
         $sql = <<<EOD
-SELECT sysconstraints.constrtype, sysconstraints.idxname
-FROM systables
-  INNER JOIN sysconstraints ON sysconstraints.tabid = systables.tabid
-WHERE systables.tabname = :table;
+SELECT sysconstraints.constrtype, trim(sysconstraints.idxname) as idxname
+FROM systables, sysconstraints 
+WHERE sysconstraints.tabid = systables.tabid
+      AND systables.tabname = :table;
 EOD;
         $command = $this->db->createCommand($sql, [':table' => $table->name]);
 
@@ -465,24 +464,16 @@ EOD;
     {
         $sql = <<<EOD
 SELECT tabid,
-       part1,
+       part1
        part2,
        part3,
        part4,
        part5,
        part6,
        part7,
-       part8,
-       part9,
-       part10,
-       part11,
-       part12,
-       part13,
-       part14,
-       part15,
-       part16
+       part8
 FROM sysindexes
-WHERE idxname = :indice;
+WHERE idxname = :indice
 EOD;
 
         $command = $this->db->createCommand($sql, [':indice' => $indice]);
@@ -492,7 +483,7 @@ EOD;
             }
 
             $columns = $this->getColumnsNumber($row['tabid']);
-            for ($x = 1; $x < 16; $x++) {
+            for ($x = 1; $x < 9; $x++) {
                 $colno = (isset($row["part{$x}"])) ? abs($row["part{$x}"]) : 0;
                 if ($colno == 0) {
                     continue;
@@ -530,14 +521,6 @@ SELECT sysindexes.tabid AS basetabid,
        sysindexes.part6 as basepart6,
        sysindexes.part7 as basepart7,
        sysindexes.part8 as basepart8,
-       sysindexes.part9 as basepart9,
-       sysindexes.part10 as basepart10,
-       sysindexes.part11 as basepart11,
-       sysindexes.part12 as basepart12,
-       sysindexes.part13 as basepart13,
-       sysindexes.part14 as basepart14,
-       sysindexes.part15 as basepart15,
-       sysindexes.part16 as basepart16,
        stf.tabid AS reftabid,
        TRIM(stf.tabname) AS reftabname,
        TRIM(stf.owner) AS refowner,
@@ -548,22 +531,15 @@ SELECT sysindexes.tabid AS basetabid,
        sif.part5 as refpart5,
        sif.part6 as refpart6,
        sif.part7 as refpart7,
-       sif.part8 as refpart8,
-       sif.part9 as refpart9,
-       sif.part10 as refpart10,
-       sif.part11 as refpart11,
-       sif.part12 as refpart12,
-       sif.part13 as refpart13,
-       sif.part14 as refpart14,
-       sif.part15 as refpart15,
-       sif.part16 as refpart16
-FROM sysindexes
-  INNER JOIN sysconstraints ON sysconstraints.idxname = sysindexes.idxname
-  INNER JOIN sysreferences ON sysreferences.constrid = sysconstraints.constrid
-  INNER JOIN systables AS stf ON stf.tabid = sysreferences.ptabid
-  INNER JOIN sysconstraints AS scf ON scf.constrid = sysreferences. 'primary'
-  INNER JOIN sysindexes AS sif ON sif.idxname = scf.idxname
-WHERE sysindexes.idxname = :indice;
+       sif.part8 as refpart8
+FROM sysindexes, sysconstraints,sysreferences, systables AS stf, sysconstraints AS scf, sysindexes AS sif
+WHERE 
+  sysconstraints.idxname = sysindexes.idxname
+  AND sysreferences.constrid = sysconstraints.constrid
+  AND stf.tabid = sysreferences.ptabid
+  AND scf.constrid = sysreferences. 'primary'
+  AND sif.idxname = scf.idxname
+  AND sysindexes.idxname = :indice;
 EOD;
 
         $command = $this->db->createCommand($sql, [':indice' => $indice]);
@@ -575,7 +551,7 @@ EOD;
             $foreignKey = [$row['reftabname']];
             $columnsbase = $this->getColumnsNumber($row['basetabid']);
             $columnsrefer = $this->getColumnsNumber($row['reftabid']);
-            for ($x = 1; $x < 16; $x++) {
+            for ($x = 1; $x < 9; $x++) {
                 $colnobase = (isset($row["basepart{$x}"])) ? abs($row["basepart{$x}"]) : 0;
                 if ($colnobase == 0) {
                     continue;
@@ -618,4 +594,22 @@ SQL;
         }
         return $command->queryColumn();
     }
+    
+    /**
+     * Returns the actual name of a given table name.
+     * This method will strip off curly brackets from the given table name
+     * and replace the percentage character '%' with [[Connection::tablePrefix]].
+     * @param string $name the table name to be converted
+     * @return string the real name of the given table name
+     */
+    public function getRawTableName($name)
+    {
+        if (strpos($name, '{{') !== false) {
+            $name = preg_replace('/\\{\\{(.*?)\\}\\}/', '\1', $name);
+
+            return str_replace('%', $this->db->tablePrefix, $name);
+        }
+
+        return $name;
+    }    
 }

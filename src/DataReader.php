@@ -23,7 +23,11 @@ class DataReader extends \yii\db\DataReader
     {
         //Try..Catch to prevent Function sequence error: -11067
         try {
-            return parent::read();
+            $result = parent::read();
+            foreach ($result as $k => $v) {
+                $result[$k]=trime($v);
+            }
+            return $result;
         } catch (\Exception $ex) {
         }
         return false;
